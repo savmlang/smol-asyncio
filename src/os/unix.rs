@@ -41,25 +41,25 @@ use std::os::unix::io::BorrowedFd;
 /// # }
 /// ```
 pub fn reactor_fd() -> Option<BorrowedFd<'static>> {
-    cfg_if::cfg_if! {
-        if #[cfg(all(
-            any(
-                target_os = "linux",
-                target_os = "android",
-                target_os = "illumos",
-                target_os = "solaris",
-                target_vendor = "apple",
-                target_os = "freebsd",
-                target_os = "netbsd",
-                target_os = "openbsd",
-                target_os = "dragonfly",
-            ),
-            not(polling_test_poll_backend),
-        ))] {
-            use std::os::unix::io::AsFd;
-            Some(crate::Reactor::get().poller.as_fd())
-        } else {
-            None
-        }
-    }
+  cfg_if::cfg_if! {
+      if #[cfg(all(
+          any(
+              target_os = "linux",
+              target_os = "android",
+              target_os = "illumos",
+              target_os = "solaris",
+              target_vendor = "apple",
+              target_os = "freebsd",
+              target_os = "netbsd",
+              target_os = "openbsd",
+              target_os = "dragonfly",
+          ),
+          not(polling_test_poll_backend),
+      ))] {
+          use std::os::unix::io::AsFd;
+          Some(crate::Reactor::get().poller.as_fd())
+      } else {
+          None
+      }
+  }
 }

@@ -1,4 +1,11 @@
-# async-io
+# Edits
+
+This version of the `async-io` smol PATCHES the asyncio to be cooperative and plug into our
+OWN "savmasync" library. You are required to patch it to use it.
+
+# Original documentation is below
+
+## async-io
 
 [![Build](https://github.com/smol-rs/async-io/actions/workflows/ci.yml/badge.svg)](
 https://github.com/smol-rs/async-io/actions)
