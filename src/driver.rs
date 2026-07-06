@@ -34,7 +34,7 @@ pub extern "C" fn driverloop() -> bool {
     #[cfg(feature = "tracing")]
     tracing::trace!("waiting on I/O");
 
-    reactor_lock.react(None).ok();
+    reactor_lock.react(Some(Duration::from_micros(2))).ok();
 
     LAST_TICK.store(Reactor::get().ticker(), Ordering::Release);
     return true;
