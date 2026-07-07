@@ -28,15 +28,14 @@ pub extern "C" fn driverloop() -> bool {
     LAST_TICK.store(tick, Ordering::Release);
   }
 
-  let reactor_lock = Reactor::get().try_lock();
-
-  if let Some(mut reactor_lock) = reactor_lock {
+  if let Some(mut reactor_lock) = Reactor::get().try_lock() {
     #[cfg(feature = "tracing")]
     tracing::trace!("waiting on I/O");
 
-    reactor_lock.react(Some(Duration::from_micros(2))).ok();
+    reactor_lock.react(Some(Duration::from_micros(10))).ok();
 
-    LAST_TICK.store(Reactor::get().ticker(), Ordering::Release);
+    let tick = Reactor::get().ticker();
+    LAST_TICK.store(tick, Ordering::Release);
     return true;
   }
 
