@@ -1,3 +1,4 @@
+use parking_lot::{Mutex, MutexGuard};
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -8,7 +9,7 @@ use std::mem;
 use std::panic;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::task::{ready, Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
@@ -115,7 +116,7 @@ impl Reactor {
   pub(crate) fn insert_io(&self, raw: Registration) -> io::Result<Arc<Source>> {
     // Create an I/O source for this file descriptor.
     let source = {
-      let mut sources = self.sources.lock().unwrap();
+      let mut sources = self.sources.lock();
       let key = sources.vacant_entry().key();
       let source = Arc::new(Source {
         registration: raw,
@@ -128,7 +129,7 @@ impl Reactor {
 
     // Register the file descriptor.
     if let Err(err) = source.registration.add(&self.poller, source.key) {
-      let mut sources = self.sources.lock().unwrap();
+      let mut sources = self.sources.lock();
       sources.remove(source.key);
       return Err(err);
     }
@@ -138,7 +139,7 @@ impl Reactor {
 
   /// Deregisters an I/O source from the reactor.
   pub(crate) fn remove_io(&self, source: &Source) -> io::Result<()> {
-    let mut sources = self.sources.lock().unwrap();
+    let mut sources = self.sources.lock();
     sources.remove(source.key);
     source.registration.delete(&self.poller)
   }
@@ -158,7 +159,7 @@ impl Reactor {
       .is_err()
     {
       // If the queue is full, drain it and try again.
-      let mut timers = self.timers.lock().unwrap();
+      let mut timers = self.timers.lock();
       self.process_timer_ops(&mut timers);
     }
 
@@ -173,7 +174,7 @@ impl Reactor {
     // Push a remove operation.
     while self.timer_ops.push(TimerOp::Remove(when, id)).is_err() {
       // If the queue is full, drain it and try again.
-      let mut timers = self.timers.lock().unwrap();
+      let mut timers = self.timers.lock();
       self.process_timer_ops(&mut timers);
     }
   }
@@ -186,13 +187,13 @@ impl Reactor {
   /// Locks the reactor, potentially blocking if the lock is held by another thread.
   // pub(crate) fn lock(&self) -> ReactorLock<'_> {
   //   let reactor = self;
-  //   let events = self.events.lock().unwrap();
+  //   let events = self.events.lock();
   //   ReactorLock { reactor, events }
   // }
 
   /// Attempts to lock the reactor.
   pub(crate) fn try_lock(&self) -> Option<ReactorLock<'_>> {
-    self.events.try_lock().ok().map(|events| {
+    self.events.try_lock().map(|events| {
       let reactor = self;
       ReactorLock { reactor, events }
     })
@@ -207,7 +208,7 @@ impl Reactor {
     #[cfg(feature = "tracing")]
     let _enter = span.enter();
 
-    let mut timers = self.timers.lock().unwrap();
+    let mut timers = self.timers.lock();
     self.process_timer_ops(&mut timers);
 
     let now = Instant::now();
@@ -313,12 +314,12 @@ impl ReactorLock<'_> {
       // At least one I/O event occurred.
       Ok(_) => {
         // Iterate over sources in the event list.
-        let sources = self.reactor.sources.lock().unwrap();
+        let sources = self.reactor.sources.lock();
 
         for ev in self.events.iter() {
           // Check if there is a source in the table with this key.
           if let Some(source) = sources.get(ev.key) {
-            let mut state = source.state.lock().unwrap();
+            let mut state = source.state.lock();
 
             // Collect wakers if any event was emitted.
             for &(dir, emitted) in &[(WRITE, ev.writable), (READ, ev.readable)] {
@@ -439,7 +440,7 @@ impl Source {
   ///
   /// If a different waker is already registered, it gets replaced and woken.
   fn poll_ready(&self, dir: usize, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-    let mut state = self.state.lock().unwrap();
+    let mut state = self.state.lock();
 
     // Check if the reactor has delivered an event.
     if let Some((a, b)) = state[dir].ticks {
@@ -620,7 +621,7 @@ impl<H: Borrow<crate::Async<T>> + Clone, T> Future for Ready<H, T> {
       ..
     } = &mut *self;
 
-    let mut state = handle.borrow().source.state.lock().unwrap();
+    let mut state = handle.borrow().source.state.lock();
 
     // Check if the reactor has delivered an event.
     if let Some((a, b)) = *ticks {
@@ -671,7 +672,7 @@ impl<H: Borrow<crate::Async<T>>, T> Drop for Ready<H, T> {
   fn drop(&mut self) {
     // Remove our waker when dropped.
     if let Some(key) = self.index {
-      let mut state = self.handle.borrow().source.state.lock().unwrap();
+      let mut state = self.handle.borrow().source.state.lock();
       let wakers = &mut state[self.dir].wakers;
       if wakers.contains(key) {
         wakers.remove(key);
